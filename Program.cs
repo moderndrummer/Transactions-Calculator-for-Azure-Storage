@@ -24,7 +24,6 @@ namespace AzureStorage
             var filtered = items.Where(i => i.RowKey.StartsWith("user;", StringComparison.InvariantCultureIgnoreCase)).ToList();
 
             var totalV1 = filtered.Sum(i => i.TotalBillableRequests);
-            var totalWriteV2i = filtered.Where(GetWritePredicate()).ToList();
             var totalWriteV2 = filtered.Where(GetWritePredicate()).Sum(i => i.TotalBillableRequests);
             var totalDeleteV2 = filtered.Where(GetDeletePredicate()).Sum(i => i.TotalBillableRequests);
             var totalReadV2 = totalV1 - totalDeleteV2 - totalWriteV2;
