@@ -1,18 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos.Table;
-using Microsoft.Azure.Cosmos.Table.Queryable;
-
 
 namespace AzureStorage
 {
     public class Program
     {
         private const string tablename = "$MetricsHourPrimaryTransactionsBlob";
-
         private const string connectionString = "XXXXXXXXXXX"; //Primary Blob Connection String
         private static int daysAgo = 31;
 
@@ -35,16 +29,8 @@ namespace AzureStorage
             Console.WriteLine($"Total Transactions (V1): {totalV1}");
         }
 
-        private static Func<HourPrimaryTransactionsBlobRow, bool> GetWritePredicate() =>
-            i => i.RowKey.Contains("put", StringComparison.InvariantCultureIgnoreCase) ||
-            i.RowKey.Contains("append", StringComparison.InvariantCultureIgnoreCase) ||
-            i.RowKey.Contains("list", StringComparison.InvariantCultureIgnoreCase) ||
-            i.RowKey.Contains("create", StringComparison.InvariantCultureIgnoreCase) ||
-            i.RowKey.Contains("snapshot", StringComparison.InvariantCultureIgnoreCase) ||
-            i.RowKey.Contains("copy", StringComparison.InvariantCultureIgnoreCase);
-
-        private static Func<HourPrimaryTransactionsBlobRow, bool> GetDeletePredicate() => i => i.RowKey.Contains("delete", StringComparison.InvariantCultureIgnoreCase);
-
+        private static Func<HourPrimaryTransactionsBlobRow, bool> GetWritePredicate() => PredicatesWithOr<HourPrimaryTransactionsBlobRow>("put", "append", "list", "create", "snapshot", "copy");
+        private static Func<HourPrimaryTransactionsBlobRow, bool> GetDeletePredicate() => PredicatesWithOr<HourPrimaryTransactionsBlobRow>("delete");
         private static CloudTable GetTable()
         {
             var storageAccount = CloudStorageAccount.Parse(connectionString);
@@ -56,6 +42,16 @@ namespace AzureStorage
 
         public static IQueryable<HourPrimaryTransactionsBlobRow> All(int daysAgo) => GetTable().CreateQuery<HourPrimaryTransactionsBlobRow>()
             .Where(i => i.Timestamp > DateTime.UtcNow.AddDays(-daysAgo) && i.TotalBillableRequests > 0);
+
+        private static Func<T, bool> PredicatesWithOr<T>(params string[] keys) where T : TableEntity
+        {
+            var predicate = PredicateBuilder.False<T>();
+            foreach (var key in keys)
+            {
+                predicate = predicate.Or(i => i.RowKey.Contains(key, StringComparison.InvariantCultureIgnoreCase));
+            }
+            return predicate;
+        }
     }
 
     public class HourPrimaryTransactionsBlobRow : TableEntity
@@ -66,4 +62,11 @@ namespace AzureStorage
 
         public HourPrimaryTransactionsBlobRow() { }
     }
+
+    public static class PredicateBuilder
+    {
+        public static Func<T, bool> False<T>() { return f => false; }
+        public static Func<T, bool> Or<T>(this Func<T, bool> expr1, Func<T, bool> expr2) => t => expr1(t) || expr2(t);
+    }
+
 }
